@@ -1,0 +1,40 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+use ExtUtils::PerlLocal ();
+use File::Spec ();
+
+my $perllocal = ExtUtils::PerlLocal->new(@ARGV ? (perllocal => $ARGV[0]) : ());
+
+my ($vol, $arch_dir, ) = File::Spec->splitpath($perllocal->file);
+my @arch_dir = File::Spec->splitdir($arch_dir); pop @arch_dir;
+my @packlist_dir = (@arch_dir, 'auto');
+my @lib_dir = @arch_dir[0..($#arch_dir-1)];
+my $lib_path = File::Spec->catpath($vol, File::Spec->catdir(@lib_dir), '');
+
+my $modules = $perllocal->modules;
+
+MODULE:
+foreach my $mod (sort keys %{$modules}) {
+    next if $modules->{$mod}->dir ne $lib_path;
+    my @mod = split /::/, $mod;
+    my @mod_dir = @mod; my $mod_file = pop @mod_dir;
+    my $mod_path;
+    SEARCH_MODULE: {
+	foreach my $dir_ref (\@arch_dir, \@lib_dir) {
+	    $mod_path = File::Spec->catpath($vol, File::Spec->catdir(@$dir_ref, @mod_dir), "$mod_file.pm");
+	    last SEARCH_MODULE if -f $mod_path;
+	}
+	print STDERR "$mod not installed\n";
+	next MODULE;
+    }
+    my $packlist = File::Spec->catpath($vol, File::Spec->catdir(@packlist_dir, @mod), '.packlist');
+    if (! -f $packlist) {
+	print STDERR "$mod does not have a .packlist\n";
+    }
+    #print "$mod: $mod_path\n";
+    print "$mod\n";
+    #print "$mod: ".join(", ", $modules->{$mod}->exe_files), "\n";
+    #print "$mod: ".join(", ", @{$modules->{$mod}->history}), "\n";
+}
